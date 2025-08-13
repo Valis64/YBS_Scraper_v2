@@ -1,0 +1,11 @@
+requests
+beautifulsoup4
+lxml
+pandas
+openpyxl
+python-dotenv
+customtkinter
+
+# Optional dependencies
+selenium
+webdriver-manager
