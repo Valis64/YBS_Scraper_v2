@@ -215,9 +215,15 @@ class YBSNowScraper:
             if "date" in col or col.endswith("_at"):
                 df[col] = pd.to_datetime(df[col], errors="coerce")
 
+        df = df.drop_duplicates()
+
         return df
 
     def save_outputs(self, df: pd.DataFrame) -> Tuple[str, str, str]:
+        sort_cols = [c for c in ["order_id", "date"] if c in df.columns]
+        if sort_cols:
+            df = df.sort_values(sort_cols).reset_index(drop=True)
+
         df.to_csv(self.cfg.out_csv, index=False)
         df.to_excel(self.cfg.out_xlsx, index=False)
         import sqlite3
