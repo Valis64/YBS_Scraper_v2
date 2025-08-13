@@ -211,6 +211,7 @@ def run_cli(cfg: ScrapeConfig) -> int:
 def launch_gui(default_cfg: ScrapeConfig) -> None:
     import customtkinter as ctk
     import threading
+    from tkinter import filedialog
 
     ctk.set_appearance_mode("system")
     ctk.set_default_color_theme("blue")
@@ -237,12 +238,31 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
         entry.grid(row=row+1, column=0, padx=12, pady=(0, 8), sticky="ew")
         return entry
 
+    def file_entry(row: int, label: str, var: ctk.StringVar, command) -> ctk.CTkEntry:
+        ctk.CTkLabel(app, text=label).grid(row=row, column=0, padx=12, pady=(8, 0), sticky="w")
+        frame = ctk.CTkFrame(app)
+        frame.grid(row=row+1, column=0, padx=12, pady=(0, 8), sticky="ew")
+        frame.grid_columnconfigure(0, weight=1)
+        entry = ctk.CTkEntry(frame, textvariable=var)
+        entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ctk.CTkButton(frame, text="Browse", command=command).grid(row=0, column=1)
+        return entry
+
     labeled_entry(0, "Base URL", base_url_var)
     labeled_entry(2, "Login URL", login_url_var)
     labeled_entry(4, "Orders URL", orders_url_var)
     labeled_entry(6, "Email", email_var)
     labeled_entry(8, "Password", password_var, show="*")
-    labeled_entry(10, "Database File", db_file_var)
+
+    def browse_db_file() -> None:
+        path = filedialog.asksaveasfilename(
+            defaultextension=".db",
+            filetypes=[("SQLite Database", "*.db"), ("All Files", "*.*")],
+        )
+        if path:
+            db_file_var.set(path)
+
+    file_entry(10, "Database File", db_file_var, browse_db_file)
 
     # Buttons
     btn_frame = ctk.CTkFrame(app)
