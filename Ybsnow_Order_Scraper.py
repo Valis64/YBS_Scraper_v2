@@ -166,6 +166,7 @@ class YBSNowScraper:
         return self._clean_df(df)
 
     def _clean_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        import re
         # Normalize column names
         df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
         # Drop completely empty columns
@@ -174,6 +175,46 @@ class YBSNowScraper:
         for col in df.columns:
             if df[col].dtype == object:
                 df[col] = df[col].astype(str).str.strip()
+
+        # Map known headers to consistent snake_case names
+        rename_map = {
+            "Order #": "order_id",
+            "Order": "order_id",
+            "Order ID": "order_id",
+            "PO": "po",
+            "P.O.": "po",
+            "Date": "date",
+            "Order Date": "date",
+            "Due": "due_date",
+            "Qty": "quantity",
+            "Quantity": "quantity",
+            "Total": "total",
+            "Amount": "total",
+            "Customer": "customer",
+            "Workstation": "workstation",
+            "Status": "status",
+        }
+        df = df.rename(columns=rename_map)
+
+        def snake_case(name: str) -> str:
+            name = name.replace("#", "number")
+            name = re.sub(r"[^0-9a-zA-Z]+", "_", name)
+            return name.strip("_").lower()
+
+        df.columns = [snake_case(c) for c in df.columns]
+
+        # Convert numeric fields
+        for col in df.columns:
+            if any(k in col for k in ["id", "qty", "quantity"]):
+                df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+            elif any(k in col for k in ["total", "amount", "price"]):
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Parse date columns
+        for col in df.columns:
+            if "date" in col or col.endswith("_at"):
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+
         return df
 
     def save_outputs(self, df: pd.DataFrame) -> Tuple[str, str, str]:
@@ -181,7 +222,17 @@ class YBSNowScraper:
         df.to_excel(self.cfg.out_xlsx, index=False)
         import sqlite3
         conn = sqlite3.connect(self.cfg.out_db)
-        df.to_sql("orders", conn, if_exists="replace", index=False)
+        dtype_map = {}
+        for col, dtype in df.dtypes.items():
+            if pd.api.types.is_integer_dtype(dtype):
+                dtype_map[col] = "INTEGER"
+            elif pd.api.types.is_float_dtype(dtype):
+                dtype_map[col] = "REAL"
+            elif pd.api.types.is_datetime64_any_dtype(dtype):
+                dtype_map[col] = "TIMESTAMP"
+            else:
+                dtype_map[col] = "TEXT"
+        df.to_sql("orders", conn, if_exists="replace", index=False, dtype=dtype_map)
         conn.close()
         return (
             os.path.abspath(self.cfg.out_csv),
