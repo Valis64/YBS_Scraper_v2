@@ -8,7 +8,7 @@ Secure Login — Uses the site’s form (email, password, action=signin) to auth
 
 Data Extraction — Grabs the orders table from the authenticated page.
 
-Multiple Outputs — Saves results to .csv and .xlsx.
+Multiple Outputs — Saves results to .csv, .xlsx, and a user-selected SQLite database.
 
 Dual Interface —
 
@@ -66,6 +66,8 @@ orders.csv
 
 orders.xlsx
 
+orders.db
+
 GUI Mode
 python ybsnow_order_scraper.py --gui
 
@@ -88,7 +90,7 @@ Parses the HTML to find a table (id="orders", class="orders", or .table.table-st
 
 Cleans and normalizes the table with pandas.
 
-Saves to CSV/XLSX and displays a preview in GUI mode.
+Saves to CSV/XLSX/SQLite and displays a preview in GUI mode.
 
 ❗ Troubleshooting
 

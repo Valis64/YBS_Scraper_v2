@@ -5,7 +5,7 @@ YBSNow Order Scraper — CLI + GUI (customtkinter)
 Features
 - Logs into https://www.ybsnow.com/ using the email/password fields described.
 - Navigates to a provided, authenticated Orders page URL and extracts the Orders table.
-- Saves results to CSV and XLSX and shows a preview in a simple GUI.
+- Saves results to CSV, XLSX, and a user-selected SQLite database and shows a preview in a simple GUI.
 - CLI for automation; GUI for convenience.
 
 Dependencies
@@ -64,6 +64,7 @@ class ScrapeConfig:
     password: str
     out_csv: str = "orders.csv"
     out_xlsx: str = "orders.xlsx"
+    out_db: str = "orders.db"
     timeout: int = 30
 
 
@@ -175,10 +176,18 @@ class YBSNowScraper:
                 df[col] = df[col].astype(str).str.strip()
         return df
 
-    def save_outputs(self, df: pd.DataFrame) -> Tuple[str, str]:
+    def save_outputs(self, df: pd.DataFrame) -> Tuple[str, str, str]:
         df.to_csv(self.cfg.out_csv, index=False)
         df.to_excel(self.cfg.out_xlsx, index=False)
-        return (os.path.abspath(self.cfg.out_csv), os.path.abspath(self.cfg.out_xlsx))
+        import sqlite3
+        conn = sqlite3.connect(self.cfg.out_db)
+        df.to_sql("orders", conn, if_exists="replace", index=False)
+        conn.close()
+        return (
+            os.path.abspath(self.cfg.out_csv),
+            os.path.abspath(self.cfg.out_xlsx),
+            os.path.abspath(self.cfg.out_db),
+        )
 
 
 # ----------------------------- CLI ---------------------------------
@@ -192,8 +201,8 @@ def run_cli(cfg: ScrapeConfig) -> int:
     print("[*] Parsing Orders table...")
     df = scraper.parse_orders_table(html)
     print(f"[*] Parsed {len(df)} rows and {len(df.columns)} columns.")
-    csv_path, xlsx_path = scraper.save_outputs(df)
-    print(f"[*] Saved: \n  CSV : {csv_path}\n  XLSX: {xlsx_path}")
+    csv_path, xlsx_path, db_path = scraper.save_outputs(df)
+    print(f"[*] Saved: \n  CSV : {csv_path}\n  XLSX: {xlsx_path}\n  DB  : {db_path}")
     return 0
 
 
@@ -212,7 +221,7 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
 
     # GRID LAYOUT
     app.grid_columnconfigure(0, weight=1)
-    app.grid_rowconfigure(6, weight=1)
+    app.grid_rowconfigure(14, weight=1)
 
     # Inputs
     base_url_var = ctk.StringVar(value=default_cfg.base_url)
@@ -220,6 +229,7 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
     orders_url_var = ctk.StringVar(value=default_cfg.orders_url)
     email_var = ctk.StringVar(value=default_cfg.email)
     password_var = ctk.StringVar(value=default_cfg.password)
+    db_file_var = ctk.StringVar(value=default_cfg.out_db)
 
     def labeled_entry(row: int, label: str, var: ctk.StringVar, show: Optional[str] = None):
         ctk.CTkLabel(app, text=label).grid(row=row, column=0, padx=12, pady=(8, 0), sticky="w")
@@ -232,20 +242,21 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
     labeled_entry(4, "Orders URL", orders_url_var)
     labeled_entry(6, "Email", email_var)
     labeled_entry(8, "Password", password_var, show="*")
+    labeled_entry(10, "Database File", db_file_var)
 
     # Buttons
     btn_frame = ctk.CTkFrame(app)
-    btn_frame.grid(row=10, column=0, padx=12, pady=6, sticky="ew")
+    btn_frame.grid(row=12, column=0, padx=12, pady=6, sticky="ew")
     btn_frame.grid_columnconfigure(0, weight=0)
     btn_frame.grid_columnconfigure(1, weight=0)
     btn_frame.grid_columnconfigure(2, weight=1)
 
     status_var = ctk.StringVar(value="Idle.")
     status_label = ctk.CTkLabel(app, textvariable=status_var)
-    status_label.grid(row=11, column=0, padx=12, pady=(0, 6), sticky="w")
+    status_label.grid(row=13, column=0, padx=12, pady=(0, 6), sticky="w")
 
     preview = ctk.CTkTextbox(app, height=220)
-    preview.grid(row=12, column=0, padx=12, pady=8, sticky="nsew")
+    preview.grid(row=14, column=0, padx=12, pady=8, sticky="nsew")
 
     def do_scrape():
         status_var.set("Logging in…")
@@ -256,6 +267,7 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
             orders_url=orders_url_var.get().strip(),
             email=email_var.get().strip(),
             password=password_var.get().strip(),
+            out_db=db_file_var.get().strip() or default_cfg.out_db,
         )
         try:
             scraper = YBSNowScraper(cfg)
@@ -264,10 +276,13 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
             html = scraper.fetch_orders_html()
             status_var.set("Parsing table…")
             df = scraper.parse_orders_table(html)
-            csv_path, xlsx_path = scraper.save_outputs(df)
+            csv_path, xlsx_path, db_path = scraper.save_outputs(df)
             status_var.set("Done.")
             head = df.head(20).to_string(index=False)
-            preview.insert("1.0", f"Rows: {len(df)}  Cols: {len(df.columns)}\nSaved CSV: {csv_path}\nSaved XLSX: {xlsx_path}\n\nPreview (first 20 rows):\n{head}\n")
+            preview.insert(
+                "1.0",
+                f"Rows: {len(df)}  Cols: {len(df.columns)}\nSaved CSV: {csv_path}\nSaved XLSX: {xlsx_path}\nSaved DB: {db_path}\n\nPreview (first 20 rows):\n{head}\n",
+            )
         except Exception as e:
             status_var.set("Error.")
             preview.insert("1.0", f"[ERROR] {e}\n")
@@ -318,6 +333,7 @@ def build_cfg(args: argparse.Namespace) -> ScrapeConfig:
         password=password,
         out_csv=args.out_csv,
         out_xlsx=args.out_xlsx,
+        out_db=args.db_file,
         timeout=args.timeout,
     )
 
@@ -331,6 +347,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--password", default=None, help="Login password (or set YBSNOW_PASSWORD in .env)")
     p.add_argument("--out-csv", default="orders.csv", help="Path to save CSV (default: orders.csv)")
     p.add_argument("--out-xlsx", default="orders.xlsx", help="Path to save Excel (default: orders.xlsx)")
+    p.add_argument("--db-file", default="orders.db", help="Path to SQLite DB file (default: orders.db)")
     p.add_argument("--timeout", type=int, default=30, help="HTTP timeout seconds (default: 30)")
     p.add_argument("--gui", action="store_true", help="Launch the customtkinter GUI")
     return p.parse_args(argv)
@@ -353,6 +370,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             orders_url=orders_url,
             email=email,
             password=password,
+            out_db=args.db_file,
         )
         launch_gui(default_cfg)
         return 0
