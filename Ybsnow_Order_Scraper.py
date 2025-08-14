@@ -64,6 +64,7 @@ class ScrapeConfig:
     password: str
     out_csv: str = "orders.csv"
     out_xlsx: str = "orders.xlsx"
+    out_json: str = "orders.json"
     out_db: str = "orders.db"
     timeout: int = 30
 
@@ -219,13 +220,14 @@ class YBSNowScraper:
 
         return df
 
-    def save_outputs(self, df: pd.DataFrame) -> Tuple[str, str, str]:
+    def save_outputs(self, df: pd.DataFrame) -> Tuple[str, str, str, str]:
         sort_cols = [c for c in ["order_id", "date"] if c in df.columns]
         if sort_cols:
             df = df.sort_values(sort_cols).reset_index(drop=True)
 
         df.to_csv(self.cfg.out_csv, index=False)
         df.to_excel(self.cfg.out_xlsx, index=False)
+        df.to_json(self.cfg.out_json, orient="records")
         import sqlite3
         conn = sqlite3.connect(self.cfg.out_db)
         dtype_map = {}
@@ -243,6 +245,7 @@ class YBSNowScraper:
         return (
             os.path.abspath(self.cfg.out_csv),
             os.path.abspath(self.cfg.out_xlsx),
+            os.path.abspath(self.cfg.out_json),
             os.path.abspath(self.cfg.out_db),
         )
 
@@ -258,8 +261,10 @@ def run_cli(cfg: ScrapeConfig) -> int:
     print("[*] Parsing Orders table...")
     df = scraper.parse_orders_table(html)
     print(f"[*] Parsed {len(df)} rows and {len(df.columns)} columns.")
-    csv_path, xlsx_path, db_path = scraper.save_outputs(df)
-    print(f"[*] Saved: \n  CSV : {csv_path}\n  XLSX: {xlsx_path}\n  DB  : {db_path}")
+    csv_path, xlsx_path, json_path, db_path = scraper.save_outputs(df)
+    print(
+        f"[*] Saved: \n  CSV : {csv_path}\n  XLSX: {xlsx_path}\n  JSON: {json_path}\n  DB  : {db_path}"
+    )
     return 0
 
 
@@ -344,6 +349,7 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
             orders_url=orders_url_var.get().strip(),
             email=email_var.get().strip(),
             password=password_var.get().strip(),
+            out_json=default_cfg.out_json,
             out_db=db_file_var.get().strip() or default_cfg.out_db,
         )
         try:
@@ -353,12 +359,12 @@ def launch_gui(default_cfg: ScrapeConfig) -> None:
             html = scraper.fetch_orders_html()
             status_var.set("Parsing table…")
             df = scraper.parse_orders_table(html)
-            csv_path, xlsx_path, db_path = scraper.save_outputs(df)
+            csv_path, xlsx_path, json_path, db_path = scraper.save_outputs(df)
             status_var.set("Done.")
             head = df.head(20).to_string(index=False)
             preview.insert(
                 "1.0",
-                f"Rows: {len(df)}  Cols: {len(df.columns)}\nSaved CSV: {csv_path}\nSaved XLSX: {xlsx_path}\nSaved DB: {db_path}\n\nPreview (first 20 rows):\n{head}\n",
+                f"Rows: {len(df)}  Cols: {len(df.columns)}\nSaved CSV: {csv_path}\nSaved XLSX: {xlsx_path}\nSaved JSON: {json_path}\nSaved DB: {db_path}\n\nPreview (first 20 rows):\n{head}\n",
             )
         except Exception as e:
             status_var.set("Error.")
@@ -410,6 +416,7 @@ def build_cfg(args: argparse.Namespace) -> ScrapeConfig:
         password=password,
         out_csv=args.out_csv,
         out_xlsx=args.out_xlsx,
+        out_json=args.out_json,
         out_db=args.db_file,
         timeout=args.timeout,
     )
@@ -424,6 +431,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--password", default=None, help="Login password (or set YBSNOW_PASSWORD in .env)")
     p.add_argument("--out-csv", default="orders.csv", help="Path to save CSV (default: orders.csv)")
     p.add_argument("--out-xlsx", default="orders.xlsx", help="Path to save Excel (default: orders.xlsx)")
+    p.add_argument("--out-json", default="orders.json", help="Path to save JSON (default: orders.json)")
     p.add_argument("--db-file", default="orders.db", help="Path to SQLite DB file (default: orders.db)")
     p.add_argument("--timeout", type=int, default=30, help="HTTP timeout seconds (default: 30)")
     p.add_argument("--gui", action="store_true", help="Launch the customtkinter GUI")
@@ -447,6 +455,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             orders_url=orders_url,
             email=email,
             password=password,
+            out_json=args.out_json,
             out_db=args.db_file,
         )
         launch_gui(default_cfg)

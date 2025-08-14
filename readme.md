@@ -8,7 +8,7 @@ Secure Login — Uses the site’s form (email, password, action=signin) to auth
 
 Data Extraction — Grabs the orders table from the authenticated page.
 
-Multiple Outputs — Saves results to .csv, .xlsx, and a user-selected SQLite database.
+Multiple Outputs — Saves results to .csv, .xlsx, .json, and a user-selected SQLite database.
 
 Dual Interface —
 
@@ -57,14 +57,18 @@ Or pass them explicitly:
 python ybsnow_order_scraper.py \
   --orders-url "https://www.ybsnow.com/<orders-page>" \
   --email "you@example.com" \
-  --password "secret"
+  --password "secret" \
+  --out-json "orders.json"
 
+Use `--out-json` to choose the JSON output path (default: `orders.json`).
 
 Output:
 
 orders.csv
 
 orders.xlsx
+
+orders.json
 
 orders.db
 

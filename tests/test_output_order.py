@@ -26,6 +26,7 @@ def test_save_outputs_preserves_order(tmp_path):
         password="",
         out_csv=str(tmp_path / "orders.csv"),
         out_xlsx=str(tmp_path / "orders.xlsx"),
+        out_json=str(tmp_path / "orders.json"),
         out_db=str(tmp_path / "orders.db"),
     )
     scraper = YBSNowScraper(cfg)
@@ -34,14 +35,16 @@ def test_save_outputs_preserves_order(tmp_path):
     assert len(cleaned) == 3
     expected = cleaned.sort_values(["order_id", "date"]).reset_index(drop=True)
 
-    csv_path, xlsx_path, db_path = scraper.save_outputs(cleaned)
+    csv_path, xlsx_path, json_path, db_path = scraper.save_outputs(cleaned)
 
     df_csv = pd.read_csv(csv_path, parse_dates=["date"])
     df_xlsx = pd.read_excel(xlsx_path, parse_dates=["date"])
+    df_json = pd.read_json(json_path)
     conn = sqlite3.connect(db_path)
     df_sql = pd.read_sql_query("SELECT * FROM orders", conn, parse_dates=["date"])
     conn.close()
 
     pd.testing.assert_frame_equal(df_csv, expected, check_dtype=False)
     pd.testing.assert_frame_equal(df_xlsx, expected, check_dtype=False)
+    pd.testing.assert_frame_equal(df_json, expected, check_dtype=False)
     pd.testing.assert_frame_equal(df_sql, expected, check_dtype=False)
