@@ -177,6 +177,11 @@ class YBSNowScraper:
         import re
         # Normalize column names
         df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
+        # If columns are numeric indices, the first row contains headers
+        if all(col.isdigit() for col in df.columns):
+            df.columns = df.iloc[0].astype(str).str.strip()
+            df = df[1:].reset_index(drop=True)
+            df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
         # Drop completely empty columns
         df = df.dropna(axis=1, how="all")
         # Strip whitespace in string cells

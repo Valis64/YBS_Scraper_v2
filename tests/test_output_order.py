@@ -8,6 +8,7 @@ from Ybsnow_Order_Scraper import (
     YBSNowScraper,
     ScrapeConfig,
     OPTIONAL_COLUMNS,
+    REQUIRED_COLUMNS,
 )
 
 
@@ -77,3 +78,20 @@ def test_clean_df_fills_optional_columns():
     cleaned = scraper._clean_df(df)
     for col in OPTIONAL_COLUMNS:
         assert col in cleaned.columns
+
+
+def test_clean_df_numeric_column_headers():
+    raw = pd.DataFrame([
+        ["Order #", "Date", "Total"],
+        ["1", "2024-06-01", "10"],
+    ])
+    cfg = ScrapeConfig(base_url="", login_url="", orders_url="", email="", password="")
+    scraper = YBSNowScraper(cfg)
+
+    cleaned = scraper._clean_df(raw)
+    expected_cols = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
+    assert set(cleaned.columns) == expected_cols
+    assert len(cleaned) == 1
+    assert cleaned.loc[0, "order_id"] == 1
+    assert cleaned.loc[0, "total"] == 10.0
+    assert cleaned.loc[0, "date"] == pd.Timestamp("2024-06-01")
