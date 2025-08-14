@@ -211,6 +211,24 @@ class YBSNowScraper:
 
         df.columns = [snake_case(c) for c in df.columns]
 
+        # Heuristic remapping: if the cleaned column names still do not match
+        # the expected schema, try to map them based on common keywords. This
+        # helps when the upstream table uses slightly different headers such as
+        # "Order Number" or "Total Amount" which would otherwise cause the
+        # required-column check to fail.
+        auto_map = {}
+        for col in df.columns:
+            lc = col.lower()
+            if col not in REQUIRED_COLUMNS:
+                if "order" in lc and ("id" in lc or "number" in lc or lc.endswith("_no")):
+                    auto_map[col] = "order_id"
+                elif "date" in lc and "due" not in lc:
+                    auto_map[col] = "date"
+                elif any(word in lc for word in ["total", "amount", "price"]):
+                    auto_map[col] = "total"
+        if auto_map:
+            df = df.rename(columns=auto_map)
+
         # Convert numeric fields
         for col in df.columns:
             if any(k in col for k in ["id", "qty", "quantity"]):
