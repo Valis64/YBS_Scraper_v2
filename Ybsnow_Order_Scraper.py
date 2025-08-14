@@ -69,6 +69,13 @@ class ScrapeConfig:
     timeout: int = 30
 
 
+# Columns expected in the cleaned orders DataFrame. ``REQUIRED_COLUMNS`` must be
+# present after cleaning, while ``OPTIONAL_COLUMNS`` will be added as empty
+# columns if they are absent to keep a consistent schema across outputs.
+REQUIRED_COLUMNS = {"order_id", "date", "total"}
+OPTIONAL_COLUMNS = {"po", "customer", "workstation", "status", "due_date", "quantity"}
+
+
 class YBSNowScraper:
     def __init__(self, cfg: ScrapeConfig):
         self.cfg = cfg
@@ -217,6 +224,13 @@ class YBSNowScraper:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
 
         df = df.drop_duplicates()
+
+        missing = REQUIRED_COLUMNS - set(df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
+
+        for col in OPTIONAL_COLUMNS - set(df.columns):
+            df[col] = pd.NA
 
         return df
 
